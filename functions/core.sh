@@ -26,7 +26,7 @@ function convert_androidimage() {
 	fi
 }
 
-function shrink_images() {
+function shrink_android_img() {
 	[ -f $IMAGE_DIR/system.img ] && sudo e2fsck -fy $IMAGE_DIR/system.img >/dev/null
 	[ -f $IMAGE_DIR/system.img ] && sudo resize2fs -p -M $IMAGE_DIR/system.img
 }
@@ -35,13 +35,22 @@ function inject_androidimage() {
 	sudo mv $IMAGE_DIR/system.img $ROOTFS_DIR
 }
 
-function unmount() {
+function unmount_rootfs() {
 	sudo umount $ROOTFS_DIR
 }
 
-function flash_img() {
-	adb push $IMAGE_DIR/rootfs.img /data/
-	adb push $IMAGE_DIR/system.img /data/
+function flash_rootfs_img() {
+	if ! adb push $IMAGE_DIR/rootfs.img /data/ ; then
+		echo "Error: Couldn't copy the rootfs to the device. Is the device connected?"
+		exit 1
+	fi
+}
+
+function flash_android_img() {
+	if ! adb push $IMAGE_DIR/system.img /data/ ; then
+		echo "Error: Couldn't copy the android image to the device. Is the device connected?"
+		exit 1
+	fi
 }
 
 function flash_dir() {

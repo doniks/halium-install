@@ -19,9 +19,11 @@ export ROOTFS_RELEASE="none"
 export INSTALL_MODE="img"
 export DO_COPY_SSH_KEY=false
 export SSH_KEY=~/.ssh/id_rsa.pub
+export DO_ROOTFS=true
+export DO_AND_IMAGE=true
 
 function quiet () {
-    cat > /dev/null
+	cat > /dev/null
 }
 
 out=quiet
@@ -67,6 +69,10 @@ while [ -n "$1" ] ; do
 	"-i")
 		DO_COPY_SSH_KEY=true
 		;;
+	"-S")
+		# do only the android system img, not the rootfs
+		DO_ROOTFS=false
+		;;
 	"-v")
 		out="cat -"
 		;;
@@ -78,16 +84,39 @@ while [ -n "$1" ] ; do
 done
 
 # parse positional parameters
-if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
-	usage
-	exit
+echo "Debug: Prepare and install rootfs: $DO_ROOTFS"
+if $DO_ROOTFS ; then
+	if [ $# -lt 1 ] ; then
+		echo "Error: Name of rootfs archive is missing"
+		usage
+		exit 1
+	fi
+	export ROOTFS_TAR=$1
+	shift
+	if [ ! -f "$ROOTFS_TAR" ] ; then
+		echo "Error: Cannot find rootfs archive \"$ROOTFS_TAR\""
+		usage
+		exit 1
+	fi
+	echo "Debug: Chosen rootfs is $ROOTFS_TAR"
+	echo "Debug: Chosen release is $ROOTFS_RELEASE"
 fi
 
-export ROOTFS_TAR=$1
-export AND_IMAGE=$2
-if [ ! -f $ROOTFS_TAR ] || [ ! -f $AND_IMAGE ]; then
-	usage
-	exit
+echo "Debug: Convert and install android system image: $DO_AND_IMAGE"
+if $DO_AND_IMAGE ; then
+	if [ $# -lt 1 ] ; then
+		echo "Error: Name of android system image is missing"
+		usage
+		exit 1
+	fi
+	export AND_IMAGE=$1
+	shift
+	if [ ! -f "$AND_IMAGE" ]; then
+		echo "Error: Cannot find android system image \"$AND_IMAGE\""
+		usage
+		exit 1
+	fi
+	echo "Debug: Chosen android image is $AND_IMAGE"
 fi
 
 # Check for missing dependencies
@@ -103,51 +132,58 @@ source $LOCATION/functions/distributions.sh
 source $LOCATION/functions/core.sh
 
 # Start installer
-echo "Debug: Chosen rootfs is $ROOTFS_TAR"
-echo "Debug: Chosen android image is $AND_IMAGE"
-echo "Debug: Chosen release is $ROOTFS_RELEASE"
 echo
 
-case "$INSTALL_MODE" in
-"img")
-	echo "I: Writing rootfs into mountable image"
-	convert_rootfs_to_img $IMAGE_SIZE 2>&1 | $out
-	;;
-"dir")
-	echo "I: Extracting rootfs"
-	convert_rootfs_to_dir 2>&1 | $out
-	;;
-esac
+if $DO_ROOTFS ; then
+	case "$INSTALL_MODE" in
+	"img")
+		echo "I: Writing rootfs into mountable image"
+		convert_rootfs_to_img $IMAGE_SIZE 2>&1 | $out
+		;;
+	"dir")
+		echo "I: Extracting rootfs"
+		convert_rootfs_to_dir 2>&1 | $out
+		;;
+	esac
 
-echo "I: Writing android image into mountable image"
-convert_androidimage 2>&1 | $out
-
-echo "I: Running post installation tasks"
-post_install $ROOTFS_RELEASE
-
-if [ "$INSTALL_MODE" = "dir" ]; then
-	echo "I: Injecting android image into rootfs"
-	inject_androidimage
+	echo "I: Running post installation tasks"
+	post_install $ROOTFS_RELEASE
 fi
 
-if [ "$INSTALL_MODE" = "img" ]; then
-	echo "I: Unmounting images"
-	unmount
+
+if $DO_AND_IMAGE ; then
+	echo "I: Writing android image into mountable image"
+	convert_androidimage 2>&1 | $out
+
+	echo "I: Shrinking android image"
+	shrink_android_img
 fi
 
-echo "I: Shrinking images"
-shrink_images
 
 case "$INSTALL_MODE" in
 "img")
-	echo "I: Pushing rootfs and android image to /data via ADB"
-	if ! flash_img $ROOTFS_RELEASE; then
-		echo "Error: Couldn't copy the files to the device, is it connected?"
+	if $DO_ROOTFS ; then
+		echo "I: Unmounting rootfs"
+		unmount_rootf
+
+		echo "I: Pushing rootfs to /data via ADB"
+		flash_rootfs_img
+	fi
+	if $DO_AND_IMAGE ; then
+		echo "I: Pushing android image to /data via ADB"
+		flash_android_img
 	fi
 	;;
 "dir")
+	echo FIXME
+	exit 1
 	echo "I: Pushing rootfs and android image to /data via ADB"
-	if ! flash_dir $ROOTFS_RELEASE; then
+
+
+	echo "I: Injecting android image into rootfs"
+	inject_androidimage
+
+	if ! flash_dir ; then
 		echo "Error: Couldn't copy the files to the device, is it connected?"
 	fi
 	;;
@@ -158,4 +194,6 @@ clean
 
 echo "I: Cleaning up device"
 clean_device
+
+echo "I: Finished successfully"
 
