@@ -27,8 +27,9 @@ function convert_androidimage() {
 }
 
 function shrink_android_img() {
-	[ -f $IMAGE_DIR/system.img ] && sudo e2fsck -fy $IMAGE_DIR/system.img >/dev/null
-	[ -f $IMAGE_DIR/system.img ] && sudo resize2fs -p -M $IMAGE_DIR/system.img
+	# FIXME: does it make sense to shrink if you don't have to so simg2img? if so, this code should move over there so we only execute if needed
+	e2fsck -fy $IMAGE_DIR/system.img
+	resize2fs -p -M $IMAGE_DIR/system.img
 }
 
 function inject_androidimage() {
@@ -59,7 +60,7 @@ function flash_dir() {
 
 function clean() {
 	# Delete created files from last install
-	sudo rm $ROOTFS_DIR $IMAGE_DIR -rf
+	rm -rf $ROOTFS_DIR $IMAGE_DIR
 }
 
 function clean_device() {
