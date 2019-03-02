@@ -164,7 +164,7 @@ case "$INSTALL_MODE" in
 "img")
 	if $DO_ROOTFS ; then
 		echo "I: Unmounting rootfs"
-		unmount_rootf
+		unmount_rootfs
 
 		echo "I: Pushing rootfs to /data via ADB"
 		flash_rootfs_img
